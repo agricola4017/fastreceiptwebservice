@@ -2,74 +2,95 @@ package com.example.demo;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import java.util.HashMap;
-import java.util.Map;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 public class ReceiptService {
 
-    private Map<String, Points> idToReceiptMap;
-    int count;
+    private final ConcurrentHashMap<Integer, Points> idToReceiptMap;
+    private final AtomicInteger count;
+
     @Autowired
     public ReceiptService() {
-        this.idToReceiptMap = new HashMap<>();
-        count = 0;
+        this.idToReceiptMap = new ConcurrentHashMap<>();
+        this.count = new AtomicInteger(0);
     }
 
     public ID saveReceipt(Receipt receipt) {
-        idToReceiptMap.put(Integer.toString(count),new Points(calculateReceipt(receipt)));
-        count++;
-        return new ID(count-1);
+        int id = count.getAndIncrement();
+        idToReceiptMap.put(id, new Points(calculateReceipt(receipt)));
+        return new ID(id);
     }
 
     public int calculateReceipt(Receipt receipt) {
         int sum = 0;
 
-        //alphanumeric
-        for (int i = 0; i < receipt.getRetailer().length(); i++) {
-            if (Character.isLetterOrDigit(receipt.getRetailer().charAt(i))) {
-                sum+=1;
+        // Retailer name points
+        String retailer = receipt.getRetailer();
+        sum += retailer.chars().filter(Character::isLetterOrDigit).count();
+
+        // Total points
+        try {
+            float total = Float.parseFloat(receipt.getTotal());
+            if (total == (int)total) {
+                sum += 75;
+            } else if (Math.abs(total % 0.25) < 0.001) { // Use small epsilon for float comparison
+                sum += 25;
+            }
+        } catch (NumberFormatException e) {
+            // Handle invalid total gracefully
+        }
+
+        // Items points
+        Item[] items = receipt.getItems();
+        sum += 5 * (items.length / 2);
+
+        // Description points 
+        for (Item item : items) {
+            String desc = item.getShortDescription().trim();
+            if (desc.length() % 3 == 0) {
+                try {
+                    double price = Double.parseDouble(item.getPrice());
+                    sum += (int)Math.ceil(price * 0.2);
+                } catch (NumberFormatException e) {
+                    // Handle invalid price gracefully
+                }
             }
         }
 
-        //total
-        float total = Float.parseFloat(receipt.getTotal());
-        if (total == (int)total) {
-            sum +=75;
-        }
-        else if (total % 0.25 == 0) {
-            sum +=25;
-        }
-
-        //items
-        sum  = sum + 5 * (receipt.getItems().length/2);
-
-        //description
-        for (Item item: receipt.getItems()) {
-            if (item.getShortDescription().trim().length()%3 == 0) {
-                sum += Math.ceil(Double.parseDouble(item.getPrice())*0.2);
+        // Purchase date points 
+        try {
+            LocalDate purchaseDate = LocalDate.parse(receipt.getPurchaseDate(), DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            if (purchaseDate.getDayOfMonth() % 2 == 1) {
+                sum += 6;
             }
+        } catch (DateTimeParseException e) {
+            // Handle invalid date gracefully
         }
 
-        //llm
-        sum+=0;
-
-        //purchase date is odd
-        if (Integer.parseInt(receipt.getPurchaseDate().substring(receipt.getPurchaseDate().length()-2))%2 == 1) {
-            sum+=6;
-        }
-
-        //time of purchase between 2 and 4 pm
-        int hour = Integer.parseInt(receipt.getPurchaseTime().substring(0,2));
-        if (hour >= 14 && hour <= 16) {
-            sum+=10;
+        // Time points - using LocalTime
+        try {
+            LocalTime purchaseTime = LocalTime.parse(receipt.getPurchaseTime(), DateTimeFormatter.ofPattern("HH:mm"));
+            if (purchaseTime.getHour() >= 14 && purchaseTime.getHour() <= 16) {
+                sum += 10;
+            }
+        } catch (DateTimeParseException e) {
+            // Handle invalid time gracefully
         }
 
         return sum;
     }
 
     public Points getPoints(String id) {
-        return idToReceiptMap.get(id);
+        try {
+            return idToReceiptMap.get(Integer.parseInt(id));
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 }

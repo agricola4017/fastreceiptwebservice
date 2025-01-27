@@ -1,5 +1,6 @@
 package com.example.demo;
 
+//pojo for item
 public class Item {
     private String shortDescription;
     private String price;

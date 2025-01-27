@@ -1,5 +1,6 @@
 package com.example.demo;
 
+//pojo for receipt
 public class Receipt {
     private String retailer;
     private String purchaseDate;
