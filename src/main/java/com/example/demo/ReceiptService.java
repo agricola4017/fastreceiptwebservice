@@ -21,12 +21,14 @@ public class ReceiptService {
         this.count = new AtomicInteger(0);
     }
 
+    // Stores receipt from user
     public ID saveReceipt(Receipt receipt) {
         int id = count.getAndIncrement();
         idToReceiptMap.put(id, new Points(calculateReceipt(receipt)));
         return new ID(id);
     }
 
+    // Calculates points for a receipt
     public int calculateReceipt(Receipt receipt) {
         int sum = 0;
 
@@ -73,7 +75,7 @@ public class ReceiptService {
             // Handle invalid date gracefully
         }
 
-        // Time points - using LocalTime
+        // Time points
         try {
             LocalTime purchaseTime = LocalTime.parse(receipt.getPurchaseTime(), DateTimeFormatter.ofPattern("HH:mm"));
             if (purchaseTime.getHour() >= 14 && purchaseTime.getHour() <= 16) {
@@ -86,6 +88,7 @@ public class ReceiptService {
         return sum;
     }
 
+    // Gets the points for a given receipt ID
     public Points getPoints(String id) {
         try {
             return idToReceiptMap.get(Integer.parseInt(id));
